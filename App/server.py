@@ -12,34 +12,16 @@ class ServerProtocol(asyncio.Protocol):
 
     def data_received(self, data: bytes):
         decoded = data.decode('utf8').strip()
-        flag = False
 
         print(decoded)
 
         if self.login is not None:
-            self.send_message(decoded)
-        else:
-            if decoded.startswith("login:"):
-                entered_login = decoded.replace("login:", "").replace("\r\n", "")
-
-                for client in self.server.clients:
-                    if client.login == entered_login:
-                        self.transport.write(
-                            f"Логин {entered_login} занят, попробуйте другой\r\n".encode('utf8')
-                        )
-                        flag = True
-                        self.server.clients.remove(self)
-                        self.transport.close()
-
-                if not flag:
-                    self.login = entered_login
-                    self.transport.write(
-                        f"Hello, {self.login}!\r\n".encode('utf8')
-                    )
-                    self.send_history()
-
+            if decoded.startswith("private"):
+                self.send_private_message(decoded.replace("private", "").strip())
             else:
-                self.transport.write("Wrong login\r\n".encode('utf8'))
+                self.send_message(decoded)
+        else:
+            self.check_login(decoded)
 
     def connection_made(self, transport: transports.Transport):
         self.server.clients.append(self)
@@ -49,6 +31,26 @@ class ServerProtocol(asyncio.Protocol):
     def connection_lost(self, exception):
         self.server.clients.remove(self)
         print("Клиент вышел")
+
+    def check_login(self, decoded):
+
+        if decoded.startswith("login:"):
+            entered_login = decoded.replace("login:", "").replace("\r\n", "")
+
+            for client in self.server.clients:
+                if client.login == entered_login:
+                    self.transport.write(
+                        f"Логин {entered_login} занят, попробуйте другой\r\n".encode('utf8')
+                    )
+                    self.transport.close()
+
+            self.login = entered_login
+            self.transport.write(
+                f"Hello, {self.login}!\r\n".encode('utf8')
+            )
+            self.send_history()
+        else:
+            self.transport.write("Wrong login\r\n".encode('utf8'))
 
     def send_message(self, content: str):
         message = f"{self.login}: {content}\r\n"
@@ -62,14 +64,30 @@ class ServerProtocol(asyncio.Protocol):
         for message in self.server.message_history:
             self.transport.write(message.encode())
 
+    def send_private_message(self, content: str):
+        target = content[0:content.find(" ")]
+        found = False
+
+        for client in self.server.clients:
+            if client.login == target:
+                content.replace(client.login, "").strip()
+                client.transport.write(
+                    f"{self.login} (private): {content}\r\n".encode()
+                )
+                found = True
+        if not found:
+            self.transport.write(f"Пользователь с ником {target} не найден!\r\n".encode())
+
 
 class Server:
     clients: list
+    admins: list
     message_history: list
 
     def __init__(self):
         self.clients = []
-        self.message_history =[]
+        self.message_history = []
+        self.admins = ["Admin"]
 
     def build_protocol(self):
         return ServerProtocol(self)
@@ -91,9 +109,6 @@ class Server:
         if len(self.message_history) > 10:
             self.message_history.pop(0)
         self.message_history.append(message)
-
-
-
 
 
 process = Server()
