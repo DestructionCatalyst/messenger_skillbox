@@ -46,11 +46,11 @@ class ServerProtocol(asyncio.Protocol):
 
             self.login = entered_login
             self.transport.write(
-                f"Hello, {self.login}!\r\n".encode('utf8')
+                f"Привет, {self.login}!\r\n".encode('utf8')
             )
             self.send_history()
         else:
-            self.transport.write("Wrong login\r\n".encode('utf8'))
+            self.transport.write("Неправильный логин\r\n".encode('utf8'))
 
     def send_message(self, content: str):
         message = f"{self.login}: {content}\r\n"
