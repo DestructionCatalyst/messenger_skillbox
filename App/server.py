@@ -18,6 +18,8 @@ class ServerProtocol(asyncio.Protocol):
         if self.login is not None:
             if decoded.startswith("private"):
                 self.send_private_message(decoded.replace("private", "").strip())
+            elif decoded.startswith("kick"):
+                self.kick(decoded.replace("kick", "").strip())
             else:
                 self.send_message(decoded)
         else:
@@ -70,13 +72,26 @@ class ServerProtocol(asyncio.Protocol):
 
         for client in self.server.clients:
             if client.login == target:
-                content.replace(client.login, "").strip()
+                content = content[content.find(" "):len(content)].strip()
                 client.transport.write(
                     f"{self.login} (private): {content}\r\n".encode()
                 )
                 found = True
         if not found:
             self.transport.write(f"Пользователь с ником {target} не найден!\r\n".encode())
+
+    def kick(self, content: str):
+        target = content[0:len(content)]
+        found = False
+        if self.login in self.server.admins:
+            for client in self.server.clients:
+                if client.login == target:
+                    client.transport.close()
+                    found = True
+            if not found:
+                self.transport.write(f"Пользователь с ником {target} не найден!\r\n".encode())
+        else:
+            self.transport.write(f"Недостаточно полномочий, чтобы сделать это!".encode())
 
 
 class Server:
